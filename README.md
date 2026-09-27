@@ -255,7 +255,7 @@ Secrets live in the real macOS Keychain; every reveal and copy goes through the 
 
 Live `ps` and `lsof` tables with sorting, filtering, and kill buttons — built in React 19 + Radix + TypeScript.
 
-**⬇ Download:** macOS [Apple Silicon](https://github.com/tarwin/tinyjsapp-examples/releases/download/procsy-v0.1.7/procsy-0.1.7-macos-arm64.dmg) / [Intel](https://github.com/tarwin/tinyjsapp-examples/releases/download/procsy-v0.1.7/procsy-0.1.7-macos-x86_64.dmg) **(4.6 MB, signed & notarized)** · Windows [procsy-0.1.9-win.zip](https://github.com/KrunchMuffin/tinyjsapp-examples/releases/download/procsy-v0.1.9/procsy-0.1.9-win.zip) **(3.9 MB)** · Linux [procsy-0.1.7-linux (x86_64)](https://github.com/tarwin/tinyjsapp-examples/releases/download/procsy-v0.1.7/procsy-0.1.7-linux-x86_64.tar.gz) / [(arm64)](https://github.com/tarwin/tinyjsapp-examples/releases/download/procsy-v0.1.7/procsy-0.1.7-linux-arm64.tar.gz) **(4.9 MB)**
+**⬇ Download:** macOS [Apple Silicon](https://github.com/tarwin/tinyjsapp-examples/releases/download/procsy-v0.1.7/procsy-0.1.7-macos-arm64.dmg) / [Intel](https://github.com/tarwin/tinyjsapp-examples/releases/download/procsy-v0.1.7/procsy-0.1.7-macos-x86_64.dmg) **(4.6 MB, signed & notarized)** · Windows [procsy-0.1.10-win.zip](https://github.com/KrunchMuffin/tinyjsapp-examples/releases/download/procsy-v0.1.10/procsy-0.1.10-win.zip) **(3.9 MB)** · Linux [procsy-0.1.7-linux (x86_64)](https://github.com/tarwin/tinyjsapp-examples/releases/download/procsy-v0.1.7/procsy-0.1.7-linux-x86_64.tar.gz) / [(arm64)](https://github.com/tarwin/tinyjsapp-examples/releases/download/procsy-v0.1.7/procsy-0.1.7-linux-arm64.tar.gz) **(4.9 MB)**
 
 ### **[sqlittle](sqlittle/)**
 
