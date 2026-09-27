@@ -33,8 +33,13 @@ function fmtRss(kb: number): string {
 // 'machine' divides by the core count, as Task Manager does.
 type CpuScale = 'core' | 'machine'
 
-function cpuColor(cpu: number): 'red' | 'amber' | 'gray' {
-  return cpu >= 50 ? 'red' : cpu >= 15 ? 'amber' : 'gray'
+// Heat by cores in use, relative to the machine (so a process gets the same
+// color on either CPU scale): amber from half a core — a pegged single
+// thread shows up — red once it holds a quarter of the machine, never under
+// 2 cores. On 16 cores: amber 50+, red 400+; on 4: amber 50+, red 200+.
+function cpuColor(cpu: number, ncpu: number): 'red' | 'amber' | 'gray' {
+  const cores = cpu / 100
+  return cores >= Math.max(2, ncpu / 4) ? 'red' : cores >= 0.5 ? 'amber' : 'gray'
 }
 
 // ps etime: [[dd-]hh:]mm:ss → seconds, so Elapsed sorts by duration, not text
@@ -243,9 +248,7 @@ export default function App() {
                     </Table.RowHeaderCell>
                     <Table.Cell><Text size="1" color="gray">{p.user}</Text></Table.Cell>
                     <Table.Cell className="num">
-                      {/* heat stays per-core on either scale: 1.4 busy cores is
-                          hot even when it reads 9% of a 16-core machine */}
-                      <Badge size="1" color={cpuColor(p.cpu)} variant="soft">{(p.cpu / cpuDiv).toFixed(1)}</Badge>
+                      <Badge size="1" color={cpuColor(p.cpu, sys?.ncpu ?? 0)} variant="soft">{(p.cpu / cpuDiv).toFixed(1)}</Badge>
                     </Table.Cell>
                     <Table.Cell className="num"><Text size="1">{p.mem.toFixed(1)}</Text></Table.Cell>
                     <Table.Cell className="num"><Text size="1">{fmtRss(p.rss)}</Text></Table.Cell>
