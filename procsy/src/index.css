@@ -26,6 +26,15 @@ td.num {
   white-space: nowrap;
 }
 
+/* Radix's selected pill is a light gray that all but vanishes on the dark
+   theme's gray track — fill it with the accent (like the Live switch) */
+.cpu-scale .rt-SegmentedControlIndicator::before {
+  background-color: var(--accent-9);
+}
+.cpu-scale .rt-SegmentedControlItem[data-state='on'] {
+  color: var(--accent-contrast);
+}
+
 /* one long process name ("CodeSetup-stable-04c0d99f…") must not widen the
    column for every row — the tooltip carries the full name/path */
 .clip {

@@ -195,13 +195,19 @@ export default function App() {
             <TextField.Slot><MagnifyingGlassIcon /></TextField.Slot>
           </TextField.Root>
           {tab === 'procs' && (
-            <SegmentedControl.Root size="1" value={cpuScale} onValueChange={pickCpuScale}>
-              <Tooltip content="Like ps/top: a process keeping two cores busy shows 200">
-                <SegmentedControl.Item value="core">100% = 1 core</SegmentedControl.Item>
-              </Tooltip>
-              <Tooltip content={`Like Task Manager: share of all ${sys?.ncpu || ''} cores together`.replace('  ', ' ')}>
-                <SegmentedControl.Item value="machine">100% = all cores</SegmentedControl.Item>
-              </Tooltip>
+            <SegmentedControl.Root size="1" className="cpu-scale" value={cpuScale}
+              onValueChange={pickCpuScale}>
+              {/* native title, not <Tooltip>: Radix's tooltip trigger writes its own
+                  data-state ("closed") over the item's "on", and the selection
+                  indicator keys on that — it silently vanished */}
+              <SegmentedControl.Item value="core"
+                title="Like ps/top: a process keeping two cores busy shows 200">
+                100% = 1 core
+              </SegmentedControl.Item>
+              <SegmentedControl.Item value="machine"
+                title={`Like Task Manager: share of all ${sys?.ncpu || ''} cores together`.replace('  ', ' ')}>
+                100% = all cores
+              </SegmentedControl.Item>
             </SegmentedControl.Root>
           )}
           <Flex align="center" gap="2">
