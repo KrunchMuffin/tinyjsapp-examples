@@ -193,7 +193,9 @@ jobs:
             const ver = zip.replace(/^.*-([0-9][\w.]*)-win\.zip$/, '$1');
             const mb = (fs.statSync(`out/${d}/${zip}`).size / 1048576).toFixed(1);
             const before = s;
-            s = s.replace(new RegExp(`${d}-v[0-9][\\w.]*/${name}-[0-9][\\w.]*-win\\.zip`, 'g'), `${d}-v${ver}/${zip}`);
+            // repo too: a fork's links must point at the fork's own release
+            s = s.replace(new RegExp(`github\\.com/[\\w.-]+/[\\w.-]+/releases/download/${d}-v[0-9][\\w.]*/${name}-[0-9][\\w.]*-win\\.zip`, 'g'),
+              `github.com/${process.env.GITHUB_REPOSITORY}/releases/download/${d}-v${ver}/${zip}`);
             s = s.replace(new RegExp(`\\[${name}-[0-9][\\w.]*-win\\.zip\\]`, 'g'), `[${zip}]`);
             s = s.replace(new RegExp(`(${zip.replace(/\./g, '\\.')}\\)\\s*\\*\\*\\()[0-9.]+ MB`, 'g'), `$1${mb} MB`);
             console.log(s === before ? `WARN: no README links matched for ${d}` : `README: ${d} -> ${ver}`);

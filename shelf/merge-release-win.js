@@ -23,7 +23,9 @@ const path = require('path');
 const crypto = require('crypto');
 
 const ROOT = path.resolve(__dirname, '..');
-const RELEASES = 'https://github.com/tarwin/tinyjsapp-examples/releases/download';
+// the repo the workflow runs in (a fork releases to itself); tarwin's by hand
+const REPO = process.env.GITHUB_REPOSITORY || 'tarwin/tinyjsapp-examples';
+const RELEASES = `https://github.com/${REPO}/releases/download`;
 const argv = process.argv.slice(2);
 const ni = argv.indexOf('--notes-file');
 const notes = ni >= 0 ? JSON.parse(fs.readFileSync(argv[ni + 1], 'utf8')) : {};
