@@ -1178,12 +1178,12 @@
         "windows"
       ],
       "win": {
-        "version": "0.1.7",
-        "zip": "procsy-0.1.7-win.zip",
-        "url": "https://github.com/tarwin/tinyjsapp-examples/releases/download/procsy-v0.1.7/procsy-0.1.7-win.zip",
-        "bytes": 4027429,
-        "size": "3.8 MB",
-        "sha256": "d45a94684f13f28176ba02f70121f47c68187332247313fe12c5e9eb75165527",
+        "version": "0.1.8",
+        "zip": "procsy-0.1.8-win.zip",
+        "url": "https://github.com/KrunchMuffin/tinyjsapp-examples/releases/download/procsy-v0.1.8/procsy-0.1.8-win.zip",
+        "bytes": 4038649,
+        "size": "3.9 MB",
+        "sha256": "cb9b37c6ef87c5a0e10821b15ea1d694121a76d2221421c90c6580770cf3e126",
         "folder": "procsy",
         "exe": "procsy.exe"
       },
