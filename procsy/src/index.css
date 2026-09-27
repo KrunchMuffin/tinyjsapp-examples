@@ -18,3 +18,20 @@ th.num {
 td.num {
   font-variant-numeric: tabular-nums;
 }
+
+/* numbers, durations and headers never wrap ("12-" / "12:48:05"); a narrow
+   window scrolls the table sideways instead */
+th,
+td.num {
+  white-space: nowrap;
+}
+
+/* one long process name ("CodeSetup-stable-04c0d99f…") must not widen the
+   column for every row — the tooltip carries the full name/path */
+.clip {
+  display: block;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

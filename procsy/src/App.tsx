@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Badge, Box, Code, DropdownMenu, Flex, Heading, IconButton, ScrollArea,
-  Switch, Table, Tabs, Text, TextField, Theme, Tooltip,
+  SegmentedControl, Switch, Table, Tabs, Text, TextField, Theme, Tooltip,
 } from '@radix-ui/themes'
 import {
   CrossCircledIcon, DotsHorizontalIcon, MagnifyingGlassIcon, ReloadIcon,
@@ -22,11 +22,16 @@ interface Sort { key: string; dir: Dir }
 
 const REFRESH_MS = 2500
 
+// switch units at 1000, not 1024, so a cell never shows four digits ("1009 MB")
 function fmtRss(kb: number): string {
-  if (kb >= 1024 * 1024) return (kb / 1024 / 1024).toFixed(1) + ' GB'
-  if (kb >= 1024) return (kb / 1024).toFixed(0) + ' MB'
+  if (kb >= 1000 * 1024) return (kb / 1024 / 1024).toFixed(1) + ' GB'
+  if (kb >= 1000) return (kb / 1024).toFixed(0) + ' MB'
   return kb + ' KB'
 }
+
+// Backends report %CPU of ONE core (ps convention, up to ncpu × 100);
+// 'machine' divides by the core count, as Task Manager does.
+type CpuScale = 'core' | 'machine'
 
 function cpuColor(cpu: number): 'red' | 'amber' | 'gray' {
   return cpu >= 50 ? 'red' : cpu >= 15 ? 'amber' : 'gray'
@@ -61,7 +66,7 @@ function SortHeader({ label, k, sort, onSort, align }: {
   return (
     <Table.ColumnHeaderCell
       onClick={() => onSort({ key: k, dir: active ? (-sort.dir as Dir) : sort.dir })}
-      style={{ cursor: 'pointer', userSelect: 'none', textAlign: align }}
+      style={{ cursor: 'pointer', userSelect: 'none', textAlign: align, whiteSpace: 'nowrap' }}
     >
       {label}{active ? (sort.dir === -1 ? ' ↓' : ' ↑') : ''}
     </Table.ColumnHeaderCell>
@@ -78,6 +83,16 @@ export default function App() {
   const [dark, setDark] = useState(false)
   const [procSort, setProcSort] = useState<Sort>({ key: 'cpu', dir: -1 })
   const [portSort, setPortSort] = useState<Sort>({ key: 'port', dir: 1 })
+  // null until chosen: then Windows defaults to Task Manager's whole-machine %
+  const [cpuPick, setCpuPick] = useState<CpuScale | null>(null)
+
+  useEffect(() => {
+    tiny.store.get('cpuScale').then((v) => { if (v === 'core' || v === 'machine') setCpuPick(v) })
+  }, [])
+  const pickCpuScale = (v: string) => {
+    setCpuPick(v as CpuScale)
+    tiny.store.set('cpuScale', v)
+  }
 
   // Only the visible tab is fetched (lsof / ps are the expensive spawns), and a
   // tick that lands while the previous refresh is still running is skipped
@@ -114,6 +129,8 @@ export default function App() {
   }, [])
 
   const win = !!sys?.win
+  const cpuScale: CpuScale = cpuPick ?? (win ? 'machine' : 'core')
+  const cpuDiv = cpuScale === 'machine' && sys?.ncpu ? sys.ncpu : 1
 
   const kill = useCallback(async (pid: number, name: string, force: boolean) => {
     const detail = win
@@ -177,6 +194,16 @@ export default function App() {
             style={{ width: 240 }}>
             <TextField.Slot><MagnifyingGlassIcon /></TextField.Slot>
           </TextField.Root>
+          {tab === 'procs' && (
+            <Tooltip content={cpuScale === 'core'
+              ? 'CPU % of one core (like ps/top): a busy process can pass 100'
+              : 'CPU % of the whole machine (like Task Manager)'}>
+              <SegmentedControl.Root size="1" value={cpuScale} onValueChange={pickCpuScale}>
+                <SegmentedControl.Item value="core">Per core</SegmentedControl.Item>
+                <SegmentedControl.Item value="machine">Total</SegmentedControl.Item>
+              </SegmentedControl.Root>
+            </Tooltip>
+          )}
           <Flex align="center" gap="2">
             <Switch size="1" checked={live} onCheckedChange={setLive} />
             <Text size="1" color="gray">Live</Text>
@@ -206,11 +233,13 @@ export default function App() {
                   <Table.Row key={p.pid} align="center">
                     <Table.Cell><Code size="1" variant="ghost">{p.pid}</Code></Table.Cell>
                     <Table.RowHeaderCell>
-                      <Tooltip content={p.path}><Text size="1">{p.name}</Text></Tooltip>
+                      <Tooltip content={p.path || p.name}><Text size="1" className="clip">{p.name}</Text></Tooltip>
                     </Table.RowHeaderCell>
                     <Table.Cell><Text size="1" color="gray">{p.user}</Text></Table.Cell>
                     <Table.Cell className="num">
-                      <Badge size="1" color={cpuColor(p.cpu)} variant="soft">{p.cpu.toFixed(1)}</Badge>
+                      {/* heat stays per-core on either scale: 1.4 busy cores is
+                          hot even when it reads 9% of a 16-core machine */}
+                      <Badge size="1" color={cpuColor(p.cpu)} variant="soft">{(p.cpu / cpuDiv).toFixed(1)}</Badge>
                     </Table.Cell>
                     <Table.Cell className="num"><Text size="1">{p.mem.toFixed(1)}</Text></Table.Cell>
                     <Table.Cell className="num"><Text size="1">{fmtRss(p.rss)}</Text></Table.Cell>
