@@ -195,14 +195,14 @@ export default function App() {
             <TextField.Slot><MagnifyingGlassIcon /></TextField.Slot>
           </TextField.Root>
           {tab === 'procs' && (
-            <Tooltip content={cpuScale === 'core'
-              ? 'CPU % of one core (like ps/top): a busy process can pass 100'
-              : 'CPU % of the whole machine (like Task Manager)'}>
-              <SegmentedControl.Root size="1" value={cpuScale} onValueChange={pickCpuScale}>
-                <SegmentedControl.Item value="core">Per core</SegmentedControl.Item>
-                <SegmentedControl.Item value="machine">Total</SegmentedControl.Item>
-              </SegmentedControl.Root>
-            </Tooltip>
+            <SegmentedControl.Root size="1" value={cpuScale} onValueChange={pickCpuScale}>
+              <Tooltip content="Like ps/top: a process keeping two cores busy shows 200">
+                <SegmentedControl.Item value="core">100% = 1 core</SegmentedControl.Item>
+              </Tooltip>
+              <Tooltip content={`Like Task Manager: share of all ${sys?.ncpu || ''} cores together`.replace('  ', ' ')}>
+                <SegmentedControl.Item value="machine">100% = all cores</SegmentedControl.Item>
+              </Tooltip>
+            </SegmentedControl.Root>
           )}
           <Flex align="center" gap="2">
             <Switch size="1" checked={live} onCheckedChange={setLive} />

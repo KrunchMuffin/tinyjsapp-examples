@@ -6,6 +6,14 @@ const dec = new TextDecoder();
 const IS_WIN = tjs.env.OS === 'Windows_NT';
 const IS_LINUX = !IS_WIN && /linux/i.test(globalThis.navigator?.platform ?? '');
 
+// procsy.exe is a GUI-subsystem exe, so on Windows every console child
+// (powershell, taskkill) gets a visible console of its own — a Windows
+// Terminal window on 11. app.spawnHidden (tinyjs 0.28.2+) routes it through
+// `launcher --run` (CREATE_NO_WINDOW, stdio passed through); elsewhere it is
+// plain tjs.spawn. init() swaps it in before any api call can run.
+type SpawnFn = (args: string[], opts: object) => any;
+let spawn: SpawnFn = (args, opts) => tjs.spawn(args, opts);
+
 const enc = new TextEncoder();
 
 function parseJsonRows(out: string): any[] {
@@ -300,7 +308,7 @@ let worker: Worker | null = null;
 let queue: Promise<unknown> = Promise.resolve();
 
 function spawnWorker(): Worker {
-  const proc = tjs.spawn(
+  const proc = spawn(
     ['powershell', '-NoProfile', '-NonInteractive', '-Command', WORKER_SCRIPT],
     { stdin: 'pipe', stdout: 'pipe', stderr: 'ignore' },
   );
@@ -353,7 +361,7 @@ async function exchange(cmd: string, retry: boolean): Promise<string> {
 }
 
 async function run(args: string[]): Promise<string> {
-  const proc = tjs.spawn(args, { stdout: 'pipe', stderr: 'ignore', stdin: 'ignore' });
+  const proc = spawn(args, { stdout: 'pipe', stderr: 'ignore', stdin: 'ignore' });
   let out = '';
   const reader = proc.stdout.getReader();
   try {
@@ -500,7 +508,7 @@ export const api: Record<string, TinyApiHandler> = {
     const killArgs = IS_WIN
       ? ['taskkill', '/PID', String(pid), ...(force ? ['/F'] : [])]
       : ['/bin/kill', force ? '-9' : '-15', String(pid)];
-    const proc = tjs.spawn(killArgs, {
+    const proc = spawn(killArgs, {
       stdout: 'ignore', stderr: 'pipe', stdin: 'ignore',
     });
     let err = '';
@@ -577,7 +585,8 @@ async function readText(path: string): Promise<string> {
   return run(['cat', path]);
 }
 
-export function init(app: TinyApp) {
+export function init(app: TinyApp & { spawnHidden?: SpawnFn }) {
+  if (app.spawnHidden) spawn = (args, opts) => app.spawnHidden!(args, opts);
   app.setMenu([{ title: 'Help', items: [{ id: 'check-updates', label: 'Check for Updates…' }] }]);
 }
 
