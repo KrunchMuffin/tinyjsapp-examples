@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Badge, Box, Code, DropdownMenu, Flex, Heading, IconButton, ScrollArea,
   Switch, Table, Tabs, Text, TextField, Theme, Tooltip,
@@ -32,11 +32,22 @@ function cpuColor(cpu: number): 'red' | 'amber' | 'gray' {
   return cpu >= 50 ? 'red' : cpu >= 15 ? 'amber' : 'gray'
 }
 
+// ps etime: [[dd-]hh:]mm:ss → seconds, so Elapsed sorts by duration, not text
+function etimeSecs(s: string): number {
+  const [days, clock] = s.includes('-') ? s.split('-') : ['0', s]
+  return clock.split(':').reduce((acc, n) => acc * 60 + +n, 0) + +days * 86400
+}
+
+function sortValue(row: unknown, key: string): unknown {
+  const v = (row as Record<string, unknown>)[key]
+  return key === 'etime' && typeof v === 'string' ? etimeSecs(v) : v
+}
+
 function sortBy<T>(rows: T[], sort: Sort): T[] {
   const { key, dir } = sort
   return [...rows].sort((a, b) => {
-    const av = (a as Record<string, unknown>)[key]
-    const bv = (b as Record<string, unknown>)[key]
+    const av = sortValue(a, key)
+    const bv = sortValue(b, key)
     if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * dir
     return String(av).localeCompare(String(bv)) * dir
   })
@@ -68,18 +79,27 @@ export default function App() {
   const [procSort, setProcSort] = useState<Sort>({ key: 'cpu', dir: -1 })
   const [portSort, setPortSort] = useState<Sort>({ key: 'port', dir: 1 })
 
+  // Only the visible tab is fetched (lsof / ps are the expensive spawns), and a
+  // tick that lands while the previous refresh is still running is skipped
+  // rather than queued behind it (per tab, so switching tabs loads at once).
+  const busy = useRef({ procs: false, ports: false })
   const refresh = useCallback(async () => {
+    if (busy.current[tab]) return
+    busy.current[tab] = true
     try {
-      const [p, o, s] = await Promise.all([
-        tiny.api.call('procs') as Promise<ProcRow[]>,
-        tiny.api.call('ports') as Promise<PortRow[]>,
+      const [rows, s] = await Promise.all([
+        tiny.api.call(tab) as Promise<ProcRow[] | PortRow[]>,
         tiny.api.call('sysinfo') as Promise<SysInfo>,
       ])
-      setProcs(p); setPorts(o); setSys(s)
+      if (tab === 'procs') setProcs(rows as ProcRow[])
+      else setPorts(rows as PortRow[])
+      setSys(s)
     } catch (e) {
       tiny.log('refresh failed: ' + e)
+    } finally {
+      busy.current[tab] = false
     }
-  }, [])
+  }, [tab])
 
   useEffect(() => { refresh() }, [refresh])
   useEffect(() => {
@@ -231,15 +251,16 @@ export default function App() {
                     </Table.Cell>
                     <Table.Cell><Text size="1" color="gray">{p.address}</Text></Table.Cell>
                     <Table.Cell><Text size="1">{p.command}</Text></Table.Cell>
-                    <Table.Cell><Code size="1" variant="ghost">{p.pid}</Code></Table.Cell>
+                    <Table.Cell><Code size="1" variant="ghost">{p.pid || '–'}</Code></Table.Cell>
                     <Table.Cell><Text size="1" color="gray">{p.user}</Text></Table.Cell>
                     <Table.Cell>
-                      <Tooltip content="Kill this process">
+                      {/* pid 0: owner not visible without root (Linux ss) */}
+                      {p.pid > 0 && <Tooltip content="Kill this process">
                         <IconButton size="1" variant="ghost" color="red"
                           onClick={() => kill(p.pid, p.command, false)}>
                           <CrossCircledIcon />
                         </IconButton>
-                      </Tooltip>
+                      </Tooltip>}
                     </Table.Cell>
                   </Table.Row>
                 ))}

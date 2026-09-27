@@ -20,8 +20,10 @@ running as a tinyjs app (0.10.0 `--template react-ts`).
   appearance>`).
 
 The backend (`backend/main.ts`, TypeScript, esbuild-bundled by tinyjs) shells
-out to `ps`, `lsof`, `kill`, and `sysctl` with `tjs.spawn` — the frontend never
-touches the system directly.
+out with `tjs.spawn` — `ps`, `lsof`, `kill`, `sysctl` on macOS; `ps`, `ss`,
+`kill` + `/proc` on Linux; on Windows one long-lived PowerShell worker running
+a small compiled C# helper (the native process + socket tables) — the
+frontend never touches the system directly.
 
 ```sh
 npm install

@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.backend.tsbuildinfo",
+    "target": "es2023",
+    // txiki.js has the web platform's TextEncoder/fetch/etc., not Node's
+    "lib": ["ES2023", "DOM"],
+    "types": [],
+    "skipLibCheck": true,
+
+    /* Bundler mode — tinyjs esbuild-bundles backend/main.ts */
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "verbatimModuleSyntax": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+
+    /* Linting */
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "erasableSyntaxOnly": true,
+    "noFallthroughCasesInSwitch": true
+  },
+  "include": ["backend"]
+}
