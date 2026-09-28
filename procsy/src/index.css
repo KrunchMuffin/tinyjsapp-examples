@@ -26,6 +26,13 @@ td.num {
   white-space: nowrap;
 }
 
+/* Chromium (WebView2) scroll anchoring follows a row on screen when React
+   moves it — a 0.0% process near the bottom that ticks to 0.1 jumps up the
+   CPU sort and dragged the view up with it. Keep the scroll position put. */
+[data-radix-scroll-area-viewport] {
+  overflow-anchor: none;
+}
+
 /* Radix's selected pill is a light gray that all but vanishes on the dark
    theme's gray track — fill it with the accent (like the Live switch) */
 .cpu-scale .rt-SegmentedControlIndicator::before {
