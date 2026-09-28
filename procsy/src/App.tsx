@@ -48,6 +48,18 @@ function etimeSecs(s: string): number {
   return clock.split(':').reduce((acc, n) => acc * 60 + +n, 0) + +days * 86400
 }
 
+// "12d 12h" / "1h 23m" / "31m 20s" / "7s" — ps's "12-12:48:05" read as a date
+function fmtElapsed(etime: string): string {
+  if (!etime) return ''
+  const s = etimeSecs(etime)
+  const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600)
+  const m = Math.floor((s % 3600) / 60), sec = s % 60
+  if (d) return `${d}d ${h}h`
+  if (h) return `${h}h ${m}m`
+  if (m) return `${m}m ${sec}s`
+  return `${sec}s`
+}
+
 function sortValue(row: unknown, key: string): unknown {
   const v = (row as Record<string, unknown>)[key]
   return key === 'etime' && typeof v === 'string' ? etimeSecs(v) : v
@@ -252,7 +264,7 @@ export default function App() {
                     </Table.Cell>
                     <Table.Cell className="num"><Text size="1">{p.mem.toFixed(1)}</Text></Table.Cell>
                     <Table.Cell className="num"><Text size="1">{fmtRss(p.rss)}</Text></Table.Cell>
-                    <Table.Cell className="num"><Text size="1" color="gray">{p.etime}</Text></Table.Cell>
+                    <Table.Cell className="num"><Text size="1" color="gray">{fmtElapsed(p.etime)}</Text></Table.Cell>
                     <Table.Cell>
                       <RowMenu
                         win={win}
