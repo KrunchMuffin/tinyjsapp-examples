@@ -16,9 +16,9 @@
     }
   },
   "win": {
-    "version": "0.1.12",
-    "url": "https://github.com/KrunchMuffin/tinyjsapp-examples/releases/download/procsy-v0.1.12/procsy-0.1.12-win.zip",
-    "sha256": "80b166118deca67dcf158e46851d580de6a6cebd6b2603b40e9d6a845f6335e7"
+    "version": "0.1.13",
+    "url": "https://github.com/KrunchMuffin/tinyjsapp-examples/releases/download/procsy-v0.1.13/procsy-0.1.13-win.zip",
+    "sha256": "0292cf0baf65eb0ab48395a99fa10b471b901d5bd37620cef6d1c605a87539ca"
   },
   "linux": {
     "arm64": {
