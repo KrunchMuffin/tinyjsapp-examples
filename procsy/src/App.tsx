@@ -33,13 +33,15 @@ function fmtRss(kb: number): string {
 // 'machine' divides by the core count, as Task Manager does.
 type CpuScale = 'core' | 'machine'
 
-// Heat by cores in use, relative to the machine (so a process gets the same
-// color on either CPU scale): amber from half a core — a pegged single
-// thread shows up — red once it holds a quarter of the machine, never under
-// 2 cores. On 16 cores: amber 50+, red 400+; on 4: amber 50+, red 200+.
+// Heat by share of the machine (so a process gets the same color on either
+// CPU scale): amber from an eighth of it, red from a quarter — with floors of
+// 1 and 2 whole cores so small machines don't light up. A few % of a big box
+// is an ordinary morning, not a warning. 16 cores: amber 12.5%+ (200 per
+// core), red 25%+ (400); 4 cores: amber 25%+ (100), red 50%+ (200).
 function cpuColor(cpu: number, ncpu: number): 'red' | 'amber' | 'gray' {
   const cores = cpu / 100
-  return cores >= Math.max(2, ncpu / 4) ? 'red' : cores >= 0.5 ? 'amber' : 'gray'
+  if (cores >= Math.max(2, ncpu / 4)) return 'red'
+  return cores >= Math.max(1, ncpu / 8) ? 'amber' : 'gray'
 }
 
 // ps etime: [[dd-]hh:]mm:ss → seconds, so Elapsed sorts by duration, not text
