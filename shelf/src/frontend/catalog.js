@@ -1179,12 +1179,12 @@ window.CATALOG = {
         "windows"
       ],
       "win": {
-        "version": "0.1.13",
-        "zip": "procsy-0.1.13-win.zip",
-        "url": "https://github.com/KrunchMuffin/tinyjsapp-examples/releases/download/procsy-v0.1.13/procsy-0.1.13-win.zip",
+        "version": "0.1.14",
+        "zip": "procsy-0.1.14-win.zip",
+        "url": "https://github.com/KrunchMuffin/tinyjsapp-examples/releases/download/procsy-v0.1.14/procsy-0.1.14-win.zip",
         "bytes": 4040025,
         "size": "3.9 MB",
-        "sha256": "0292cf0baf65eb0ab48395a99fa10b471b901d5bd37620cef6d1c605a87539ca",
+        "sha256": "522607a7a8e1c3253587b7a1ee04599406721bdb677a87f05500a87508c2bb0a",
         "folder": "procsy",
         "exe": "procsy.exe"
       },
