@@ -33,13 +33,16 @@ td.num {
   overflow-anchor: none;
 }
 
-/* Radix's selected pill is a light gray that all but vanishes on the dark
-   theme's gray track — fill it with the accent (like the Live switch) */
-.cpu-scale .rt-SegmentedControlIndicator::before {
-  background-color: var(--accent-9);
+/* grouped view: an app row toggles open on click; its processes sit on a
+   faint tint so the expanded block reads as one unit */
+.proc-group {
+  cursor: pointer;
 }
-.cpu-scale .rt-SegmentedControlItem[data-state='on'] {
-  color: var(--accent-contrast);
+.proc-group:hover {
+  background-color: var(--gray-a3);
+}
+.proc-child {
+  background-color: var(--gray-a3);
 }
 
 /* one long process name ("CodeSetup-stable-04c0d99f…") must not widen the

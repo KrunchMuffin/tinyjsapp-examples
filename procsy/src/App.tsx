@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Badge, Box, Code, DropdownMenu, Flex, Heading, IconButton, ScrollArea,
-  SegmentedControl, Switch, Table, Tabs, Text, TextField, Theme, Tooltip,
+  Switch, Table, Tabs, Text, TextField, Theme, Tooltip,
 } from '@radix-ui/themes'
 import {
-  CrossCircledIcon, DotsHorizontalIcon, MagnifyingGlassIcon, ReloadIcon,
+  ChevronDownIcon, ChevronRightIcon, CrossCircledIcon, DotsHorizontalIcon,
+  MagnifyingGlassIcon, ReloadIcon,
 } from '@radix-ui/react-icons'
 
 interface ProcRow {
@@ -16,6 +17,14 @@ interface PortRow {
   address: string; port: number
 }
 interface SysInfo { loadavg: number[]; ncpu: number; memBytes: number; win?: boolean }
+
+// One app = every process sharing a name (all the node.exe processes), with
+// the members' totals. Sorts with the same keys as a single process.
+interface Group {
+  key: string; name: string; procs: ProcRow[]
+  pid: number; cpu: number; mem: number; rss: number
+  user: string; etime: string // shared user ('' when mixed); oldest member's etime
+}
 
 type Dir = 1 | -1
 interface Sort { key: string; dir: Dir }
@@ -29,15 +38,14 @@ function fmtRss(kb: number): string {
   return kb + ' KB'
 }
 
-// Backends report %CPU of ONE core (ps convention, up to ncpu × 100);
-// 'machine' divides by the core count, as Task Manager does.
-type CpuScale = 'core' | 'machine'
+// Backends report %CPU of ONE core (ps convention, up to ncpu × 100), so
+// cpu / 100 is cores in use and cpu / ncpu the share of the machine.
 
-// Heat by share of the machine (so a process gets the same color on either
-// CPU scale): amber from an eighth of it, red from a quarter — with floors of
-// 1 and 2 whole cores so small machines don't light up. A few % of a big box
-// is an ordinary morning, not a warning. 16 cores: amber 12.5%+ (200 per
-// core), red 25%+ (400); 4 cores: amber 25%+ (100), red 50%+ (200).
+// Heat by share of the machine: amber from an eighth of it, red from a
+// quarter — with floors of 1 and 2 whole cores so small machines don't light
+// up. A few % of a big box is an ordinary morning, not a warning. 16 cores:
+// amber 12.5%+ (200 per core), red 25%+ (400); 4 cores: amber 25%+ (100),
+// red 50%+ (200).
 function cpuColor(cpu: number, ncpu: number): 'red' | 'amber' | 'gray' {
   const cores = cpu / 100
   if (cores >= Math.max(2, ncpu / 4)) return 'red'
@@ -63,7 +71,7 @@ function fmtElapsed(etime: string): string {
 }
 
 function sortValue(row: unknown, key: string): unknown {
-  const v = (row as Record<string, unknown>)[key]
+  const v = (row as Record<string, unknown>)[key === 'cores' ? 'cpu' : key]
   return key === 'etime' && typeof v === 'string' ? etimeSecs(v) : v
 }
 
@@ -75,6 +83,30 @@ function sortBy<T>(rows: T[], sort: Sort): T[] {
     if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * dir
     return String(av).localeCompare(String(bv)) * dir
   })
+}
+
+function groupProcs(rows: ProcRow[], sort: Sort): Group[] {
+  const byKey = new Map<string, ProcRow[]>()
+  for (const p of rows) {
+    const k = p.name.toLowerCase()
+    const list = byKey.get(k)
+    if (list) list.push(p)
+    else byKey.set(k, [p])
+  }
+  const groups: Group[] = []
+  for (const [key, list] of byKey) {
+    let cpu = 0, mem = 0, rss = 0, pid = Infinity, oldest = list[0]
+    for (const p of list) {
+      cpu += p.cpu; mem += p.mem; rss += p.rss; pid = Math.min(pid, p.pid)
+      if (etimeSecs(p.etime) > etimeSecs(oldest.etime)) oldest = p
+    }
+    const user = list.every((p) => p.user === list[0].user) ? list[0].user : ''
+    groups.push({
+      key, name: list[0].name, procs: sortBy(list, sort),
+      pid, cpu, mem, rss, user, etime: oldest.etime,
+    })
+  }
+  return sortBy(groups, sort)
 }
 
 function SortHeader({ label, k, sort, onSort, align }: {
@@ -102,16 +134,21 @@ export default function App() {
   const [dark, setDark] = useState(false)
   const [procSort, setProcSort] = useState<Sort>({ key: 'cpu', dir: -1 })
   const [portSort, setPortSort] = useState<Sort>({ key: 'port', dir: 1 })
-  // null until chosen: then Windows defaults to Task Manager's whole-machine %
-  const [cpuPick, setCpuPick] = useState<CpuScale | null>(null)
+  const [grouped, setGrouped] = useState(true)
+  const [open, setOpen] = useState<Set<string>>(() => new Set()) // expanded app keys
 
   useEffect(() => {
-    tiny.store.get('cpuScale').then((v) => { if (v === 'core' || v === 'machine') setCpuPick(v) })
+    tiny.store.get('groupByApp').then((v) => { if (typeof v === 'boolean') setGrouped(v) })
   }, [])
-  const pickCpuScale = (v: string) => {
-    setCpuPick(v as CpuScale)
-    tiny.store.set('cpuScale', v)
+  const pickGrouped = (v: boolean) => {
+    setGrouped(v)
+    tiny.store.set('groupByApp', v)
   }
+  const toggleOpen = (key: string) => setOpen((prev) => {
+    const next = new Set(prev)
+    if (!next.delete(key)) next.add(key)
+    return next
+  })
 
   // Only the visible tab is fetched (lsof / ps are the expensive spawns), and a
   // tick that lands while the previous refresh is still running is skipped
@@ -148,8 +185,7 @@ export default function App() {
   }, [])
 
   const win = !!sys?.win
-  const cpuScale: CpuScale = cpuPick ?? (win ? 'machine' : 'core')
-  const cpuDiv = cpuScale === 'machine' && sys?.ncpu ? sys.ncpu : 1
+  const ncpu = sys?.ncpu || 1
 
   const kill = useCallback(async (pid: number, name: string, force: boolean) => {
     const detail = win
@@ -172,6 +208,31 @@ export default function App() {
     refresh()
   }, [refresh, win])
 
+  // Every process of an app, after one confirmation. Kills run one at a time;
+  // failures (already gone, access denied) are summed up in a single alert.
+  const killGroup = useCallback(async (g: Group, force: boolean) => {
+    const n = g.procs.length
+    const ok = await tiny.win.confirm(
+      force ? `Force kill all ${n} “${g.name}” processes?` : `Quit all ${n} “${g.name}” processes?`,
+      {
+        detail: force ? 'Unsaved data in any of them is lost.' : 'Each one is asked to close.',
+        ok: force ? 'Force Kill All' : 'Quit All',
+        cancel: 'Cancel',
+      },
+    )
+    if (!ok) return
+    const errors: string[] = []
+    for (const p of g.procs) {
+      try { await tiny.api.call('kill', { pid: p.pid, force }) }
+      catch (e) { errors.push(`PID ${p.pid}: ${e}`) }
+    }
+    if (errors.length) {
+      await tiny.win.alert(`Could not kill ${errors.length} of ${n} processes`,
+        errors.slice(0, 5).join('\n') + (errors.length > 5 ? '\n…' : ''))
+    }
+    refresh()
+  }, [refresh])
+
   const q = filter.trim().toLowerCase()
   const shownProcs = useMemo(() => {
     const rows = q
@@ -181,6 +242,9 @@ export default function App() {
       : procs
     return sortBy(rows, procSort)
   }, [procs, q, procSort])
+
+  // filter first, then group: a group's totals cover the processes shown
+  const groups = useMemo(() => groupProcs(shownProcs, procSort), [shownProcs, procSort])
 
   const shownPorts = useMemo(() => {
     const rows = q
@@ -214,20 +278,10 @@ export default function App() {
             <TextField.Slot><MagnifyingGlassIcon /></TextField.Slot>
           </TextField.Root>
           {tab === 'procs' && (
-            <SegmentedControl.Root size="1" className="cpu-scale" value={cpuScale}
-              onValueChange={pickCpuScale}>
-              {/* native title, not <Tooltip>: Radix's tooltip trigger writes its own
-                  data-state ("closed") over the item's "on", and the selection
-                  indicator keys on that — it silently vanished */}
-              <SegmentedControl.Item value="core"
-                title="Like ps/top: a process keeping two cores busy shows 200">
-                100% = 1 core
-              </SegmentedControl.Item>
-              <SegmentedControl.Item value="machine"
-                title={`Like Task Manager: share of all ${sys?.ncpu || ''} cores together`.replace('  ', ' ')}>
-                100% = all cores
-              </SegmentedControl.Item>
-            </SegmentedControl.Root>
+            <Flex align="center" gap="2" title="One row per app, totalled; click it to see its processes">
+              <Switch size="1" checked={grouped} onCheckedChange={pickGrouped} />
+              <Text size="1" color="gray">Group</Text>
+            </Flex>
           )}
           <Flex align="center" gap="2">
             <Switch size="1" checked={live} onCheckedChange={setLive} />
@@ -246,6 +300,7 @@ export default function App() {
                   <SortHeader label="PID" k="pid" sort={procSort} onSort={setProcSort} />
                   <SortHeader label="Name" k="name" sort={procSort} onSort={setProcSort} />
                   <SortHeader label="User" k="user" sort={procSort} onSort={setProcSort} />
+                  <SortHeader label="Cores" k="cores" sort={procSort} onSort={setProcSort} align="right" />
                   <SortHeader label="CPU %" k="cpu" sort={procSort} onSort={setProcSort} align="right" />
                   <SortHeader label="Mem %" k="mem" sort={procSort} onSort={setProcSort} align="right" />
                   <SortHeader label="RSS" k="rss" sort={procSort} onSort={setProcSort} align="right" />
@@ -254,29 +309,21 @@ export default function App() {
                 </Table.Row>
               </Table.Header>
               <Table.Body>
-                {shownProcs.map((p) => (
-                  <Table.Row key={p.pid} align="center">
-                    <Table.Cell><Code size="1" variant="ghost">{p.pid}</Code></Table.Cell>
-                    <Table.RowHeaderCell>
-                      <Tooltip content={p.path || p.name}><Text size="1" className="clip">{p.name}</Text></Tooltip>
-                    </Table.RowHeaderCell>
-                    <Table.Cell><Text size="1" color="gray">{p.user}</Text></Table.Cell>
-                    <Table.Cell className="num">
-                      <Badge size="1" color={cpuColor(p.cpu, sys?.ncpu ?? 0)} variant="soft">{(p.cpu / cpuDiv).toFixed(1)}</Badge>
-                    </Table.Cell>
-                    <Table.Cell className="num"><Text size="1">{p.mem.toFixed(1)}</Text></Table.Cell>
-                    <Table.Cell className="num"><Text size="1">{fmtRss(p.rss)}</Text></Table.Cell>
-                    <Table.Cell className="num"><Text size="1" color="gray">{fmtElapsed(p.etime)}</Text></Table.Cell>
-                    <Table.Cell>
-                      <RowMenu
-                        win={win}
-                        onQuit={() => kill(p.pid, p.name, false)}
-                        onKill={() => kill(p.pid, p.name, true)}
-                        copies={[['Copy PID', String(p.pid)], ['Copy Path', p.path]]}
-                      />
-                    </Table.Cell>
-                  </Table.Row>
-                ))}
+                {grouped
+                  ? groups.map((g) => g.procs.length === 1
+                    ? <ProcLine key={g.key} p={g.procs[0]} ncpu={ncpu} win={win} kill={kill} indent="leaf" />
+                    : [
+                        <GroupLine key={g.key} g={g} ncpu={ncpu} win={win} open={open.has(g.key)}
+                          onToggle={() => toggleOpen(g.key)} killGroup={killGroup} />,
+                        ...(open.has(g.key)
+                          ? g.procs.map((p) => (
+                              <ProcLine key={p.pid} p={p} ncpu={ncpu} win={win} kill={kill} indent="child" />
+                            ))
+                          : []),
+                      ])
+                  : shownProcs.map((p) => (
+                      <ProcLine key={p.pid} p={p} ncpu={ncpu} win={win} kill={kill} />
+                    ))}
               </Table.Body>
             </Table.Root>
           ) : (
@@ -325,7 +372,7 @@ export default function App() {
           style={{ borderTop: '1px solid var(--gray-a5)', flexShrink: 0 }}>
           <Text size="1" color="gray">
             {tab === 'procs'
-              ? `${shownProcs.length} of ${procs.length} processes`
+              ? (grouped ? `${groups.length} apps · ` : '') + `${shownProcs.length} of ${procs.length} processes`
               : `${shownPorts.length} of ${ports.length} open ports`}
           </Text>
           <Box flexGrow="1" />
@@ -344,8 +391,92 @@ export default function App() {
   )
 }
 
-function RowMenu({ win, onQuit, onKill, copies }: {
+// Cores in use and share of the machine, side by side; heat on the share.
+function CpuCells({ cpu, ncpu }: { cpu: number; ncpu: number }) {
+  return (
+    <>
+      <Table.Cell className="num"><Text size="1">{(cpu / 100).toFixed(2)}</Text></Table.Cell>
+      <Table.Cell className="num">
+        <Badge size="1" color={cpuColor(cpu, ncpu)} variant="soft">{(cpu / ncpu).toFixed(1)}</Badge>
+      </Table.Cell>
+    </>
+  )
+}
+
+// indent: 'leaf' = a single-process app in the grouped view (its name lines up
+// with group names past the chevron); 'child' = a process under an open app.
+function ProcLine({ p, ncpu, win, kill, indent }: {
+  p: ProcRow; ncpu: number; win: boolean
+  kill: (pid: number, name: string, force: boolean) => void
+  indent?: 'leaf' | 'child'
+}) {
+  return (
+    <Table.Row align="center" className={indent === 'child' ? 'proc-child' : undefined}>
+      <Table.Cell><Code size="1" variant="ghost">{p.pid}</Code></Table.Cell>
+      <Table.RowHeaderCell>
+        {/* 19px = the group row's 15px chevron + 4px gap */}
+        <Box style={{ paddingLeft: indent === 'child' ? 32 : indent === 'leaf' ? 19 : 0 }}>
+          <Tooltip content={p.path || p.name}><Text size="1" className="clip">{p.name}</Text></Tooltip>
+        </Box>
+      </Table.RowHeaderCell>
+      <Table.Cell><Text size="1" color="gray">{p.user}</Text></Table.Cell>
+      <CpuCells cpu={p.cpu} ncpu={ncpu} />
+      <Table.Cell className="num"><Text size="1">{p.mem.toFixed(1)}</Text></Table.Cell>
+      <Table.Cell className="num"><Text size="1">{fmtRss(p.rss)}</Text></Table.Cell>
+      <Table.Cell className="num"><Text size="1" color="gray">{fmtElapsed(p.etime)}</Text></Table.Cell>
+      <Table.Cell>
+        <RowMenu
+          win={win}
+          onQuit={() => kill(p.pid, p.name, false)}
+          onKill={() => kill(p.pid, p.name, true)}
+          copies={[['Copy PID', String(p.pid)], ['Copy Path', p.path]]}
+        />
+      </Table.Cell>
+    </Table.Row>
+  )
+}
+
+function GroupLine({ g, ncpu, win, open, onToggle, killGroup }: {
+  g: Group; ncpu: number; win: boolean; open: boolean; onToggle: () => void
+  killGroup: (g: Group, force: boolean) => void
+}) {
+  const n = g.procs.length
+  const path = g.procs.find((p) => p.path)?.path ?? ''
+  return (
+    <Table.Row align="center" className="proc-group" onClick={onToggle}>
+      <Table.Cell />
+      <Table.RowHeaderCell>
+        <Flex align="center" gap="1">
+          {open ? <ChevronDownIcon /> : <ChevronRightIcon />}
+          <Text size="1" weight="medium" className="clip">{g.name}</Text>
+          <Text size="1" color="gray">({n})</Text>
+        </Flex>
+      </Table.RowHeaderCell>
+      <Table.Cell><Text size="1" color="gray">{g.user || '—'}</Text></Table.Cell>
+      <CpuCells cpu={g.cpu} ncpu={ncpu} />
+      <Table.Cell className="num"><Text size="1">{g.mem.toFixed(1)}</Text></Table.Cell>
+      <Table.Cell className="num"><Text size="1">{fmtRss(g.rss)}</Text></Table.Cell>
+      <Table.Cell className="num" title="longest-running process">
+        <Text size="1" color="gray">{fmtElapsed(g.etime)}</Text>
+      </Table.Cell>
+      {/* the menu must not also expand/collapse the row */}
+      <Table.Cell onClick={(e) => e.stopPropagation()}>
+        <RowMenu
+          win={win}
+          quitLabel={`Quit All (${n})`}
+          killLabel={`Force Kill All (${n})`}
+          onQuit={() => killGroup(g, false)}
+          onKill={() => killGroup(g, true)}
+          copies={[['Copy PIDs', g.procs.map((p) => p.pid).join(' ')], ['Copy Path', path]]}
+        />
+      </Table.Cell>
+    </Table.Row>
+  )
+}
+
+function RowMenu({ win, onQuit, onKill, copies, quitLabel, killLabel }: {
   win: boolean; onQuit: () => void; onKill: () => void; copies: [string, string][]
+  quitLabel?: string; killLabel?: string
 }) {
   return (
     <DropdownMenu.Root>
@@ -353,8 +484,8 @@ function RowMenu({ win, onQuit, onKill, copies }: {
         <IconButton size="1" variant="ghost"><DotsHorizontalIcon /></IconButton>
       </DropdownMenu.Trigger>
       <DropdownMenu.Content size="1">
-        <DropdownMenu.Item onSelect={onQuit}>{win ? 'Quit' : 'Quit (SIGTERM)'}</DropdownMenu.Item>
-        <DropdownMenu.Item color="red" onSelect={onKill}>{win ? 'Force Kill' : 'Force Kill (SIGKILL)'}</DropdownMenu.Item>
+        <DropdownMenu.Item onSelect={onQuit}>{quitLabel ?? (win ? 'Quit' : 'Quit (SIGTERM)')}</DropdownMenu.Item>
+        <DropdownMenu.Item color="red" onSelect={onKill}>{killLabel ?? (win ? 'Force Kill' : 'Force Kill (SIGKILL)')}</DropdownMenu.Item>
         <DropdownMenu.Separator />
         {copies.map(([label, value]) => (
           <DropdownMenu.Item key={label} onSelect={() => navigator.clipboard.writeText(value)}>
